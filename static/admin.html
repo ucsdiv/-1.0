@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PanSou 管理后台</title>
+    <style>
+        :root {
+            --bg: #0f0f11; --surface: #18181b; --surface-2: #232329;
+            --text: #f4f4f5; --muted: #a1a1aa; --primary: #8b5cf6; --primary-2: #6366f1;
+            --radius: 14px;
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 24px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        .container { max-width: 900px; margin: 0 auto; }
+        h1 { margin: 0 0 6px; font-size: 24px; }
+        .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+        .card {
+            background: var(--surface);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 18px;
+        }
+        .card h2 { margin: 0 0 14px; font-size: 16px; color: #e4e4e7; }
+        label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+        textarea, input, select {
+            width: 100%;
+            background: var(--surface-2);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            color: var(--text);
+            padding: 12px;
+            font-size: 14px;
+            outline: none;
+        }
+        textarea { min-height: 180px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .hint { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+        .btn {
+            border: none;
+            background: linear-gradient(135deg, var(--primary), var(--primary-2));
+            color: white;
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 12px;
+        }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .btn-secondary { background: var(--surface-2); border: 1px solid rgba(255,255,255,0.1); margin-left: 10px; }
+        .result { margin-top: 14px; font-size: 14px; color: #bbf7d0; }
+        .error { color: #fca5a5; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+        th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+        th { color: var(--muted); font-weight: 500; }
+        td { color: #d4d4d8; }
+        .back { display: inline-block; margin-bottom: 20px; color: var(--muted); text-decoration: none; font-size: 13px; }
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; background: rgba(139,92,246,0.14); color: #c4b5fd; font-size: 12px; }
+        .nav { display: flex; gap: 12px; margin-bottom: 20px; }
+        .nav a { color: var(--muted); text-decoration: none; font-size: 14px; padding-bottom: 4px; border-bottom: 2px solid transparent; }
+        .nav a.active { color: white; border-bottom-color: var(--primary); }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a class="back" href="/">← 返回搜索页</a>
+        <h1>PanSou 管理后台</h1>
+        <div class="subtitle">资源导入 / 分类管理 / 插件状态</div>
+
+        <div class="nav">
+            <a href="#" class="active" onclick="showTab('import')">批量导入</a>
+            <a href="#" onclick="showTab('resources')">资源列表</a>
+            <a href="#" onclick="showTab('plugins')">插件状态</a>
+        </div>
+
+        <div id="tab-import" class="card">
+            <h2>批量导入网盘链接</h2>
+            <label for="importData">每行一条，格式：标题 | 链接 | 提取码（可选）</label>
+            <textarea id="importData" placeholder="复仇者联盟 | https://pan.baidu.com/s/1xxxxx | abcd&#10;流浪地球 | https://pan.quark.cn/s/yyyyy"></textarea>
+            <div class="hint">支持从文本中自动识别百度、阿里、夸克、天翼、UC、迅雷、115、PikPak、移动、123 等网盘链接。标题与链接用 | 分隔，提取码可选。</div>
+            <button class="btn" id="importBtn" onclick="doImport()">开始导入</button>
+            <div id="importResult" class="result"></div>
+        </div>
+
+        <div id="tab-resources" class="card hidden">
+            <h2>资源列表</h2>
+            <button class="btn btn-secondary" onclick="loadResources()">刷新</button>
+            <div id="resourcesList"></div>
+        </div>
+
+        <div id="tab-plugins" class="card hidden">
+            <h2>已启用插件</h2>
+            <div id="pluginsList"></div>
+        </div>
+    </div>
+
+    <script>
+        function showTab(name) {
+            document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('active', a.textContent.includes(name === 'import' ? '批量导入' : name === 'resources' ? '资源列表' : '插件状态')));
+            ['import', 'resources', 'plugins'].forEach(t => document.getElementById('tab-' + t).classList.toggle('hidden', t !== name));
+            if (name === 'resources') loadResources();
+            if (name === 'plugins') loadPlugins();
+        }
+
+        async function doImport() {
+            const raw = document.getElementById('importData').value.trim();
+            const btn = document.getElementById('importBtn');
+            const resultEl = document.getElementById('importResult');
+            if (!raw) return;
+            btn.disabled = true;
+            resultEl.textContent = '导入中...';
+            resultEl.className = 'result';
+
+            const items = [];
+            for (const line of raw.split('\n')) {
+                const parts = line.split('|').map(s => s.trim());
+                const url = parts.find(p => p.startsWith('http')) || '';
+                const title = parts.find(p => p && !p.startsWith('http') && p.length < 200) || '';
+                const password = parts.find(p => /^[a-zA-Z0-9]{4,8}$/.test(p)) || '';
+                if (url) items.push({ title, url, password });
+            }
+
+            try {
+                const resp = await fetch('/api/admin/import', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items })
+                });
+                const data = await resp.json();
+                resultEl.textContent = `导入成功 ${data.imported} 条，跳过 ${data.skipped} 条${data.errors.length ? '，错误：' + data.errors.join('; ') : ''}`;
+            } catch (e) {
+                resultEl.textContent = '导入失败：' + e.message;
+                resultEl.className = 'result error';
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function loadResources() {
+            const el = document.getElementById('resourcesList');
+            el.innerHTML = '加载中...';
+            try {
+                const resp = await fetch('/api/admin/resources?limit=50');
+                const data = await resp.json();
+                if (!data.length) { el.innerHTML = '<div class="hint">暂无资源</div>'; return; }
+                el.innerHTML = '<table><thead><tr><th>ID</th><th>标题</th><th>类型</th><th>链接</th><th>时间</th></tr></thead><tbody>' +
+                    data.map(r => `<tr><td>${r.id}</td><td>${escapeHtml(r.title)}</td><td><span class="badge">${r.disk_type}</span></td><td><a href="${r.url}" target="_blank" style="color:#a5b4fc">链接</a></td><td>${formatDate(r.created_at)}</td></tr>`).join('') +
+                    '</tbody></table>';
+            } catch (e) {
+                el.innerHTML = '<div class="hint error">加载失败</div>';
+            }
+        }
+
+        async function loadPlugins() {
+            const el = document.getElementById('pluginsList');
+            try {
+                const resp = await fetch('/api/admin/plugins');
+                const data = await resp.json();
+                el.innerHTML = (data.plugins || []).map(p => `<span class="badge" style="margin-right:8px;margin-bottom:8px">${p}</span>`).join('') || '<div class="hint">无插件</div>';
+            } catch (e) {
+                el.innerHTML = '<div class="hint error">加载失败</div>';
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatDate(value) {
+            if (!value) return '';
+            const d = new Date(value);
+            return isNaN(d.getTime()) ? '' : d.toLocaleString();
+        }
+    </script>
+</body>
+</html>

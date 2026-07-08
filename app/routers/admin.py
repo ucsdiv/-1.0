@@ -5,7 +5,12 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Category, Resource, HotKeyword
-from app.schemas import CategoryCreate, CategoryOut, ResourceCreate, ResourceOut, HotKeywordOut
+from app.schemas import (
+    CategoryCreate, CategoryOut, ResourceCreate, ResourceOut,
+    HotKeywordOut, BulkImportRequest, BulkImportResponse,
+)
+from app.services.plugin_manager import plugin_manager
+from app.utils.link_parser import detect_disk_type
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -51,3 +56,43 @@ def delete_resource(resource_id: int, db: Session = Depends(get_db)):
 @router.get("/hot-keywords", response_model=List[HotKeywordOut])
 def list_hot_keywords(limit: int = 20, db: Session = Depends(get_db)):
     return db.query(HotKeyword).order_by(HotKeyword.count.desc()).limit(limit).all()
+
+
+@router.post("/import", response_model=BulkImportResponse)
+def bulk_import(payload: BulkImportRequest, db: Session = Depends(get_db)):
+    imported = 0
+    skipped = 0
+    errors: List[str] = []
+    for idx, item in enumerate(payload.items):
+        url = item.url.strip()
+        title = item.title.strip() or "未命名资源"
+        if not url:
+            skipped += 1
+            continue
+        disk_type = item.disk_type.strip() or detect_disk_type(url) or "others"
+        existing = db.query(Resource).filter(Resource.url == url).first()
+        if existing:
+            skipped += 1
+            continue
+        try:
+            resource = Resource(
+                title=title,
+                content=item.content,
+                disk_type=disk_type,
+                url=url,
+                password=item.password,
+                category_id=item.category_id,
+                tags=item.tags,
+                source="import",
+            )
+            db.add(resource)
+            imported += 1
+        except Exception as e:
+            errors.append(f"第 {idx + 1} 行导入失败: {str(e)}")
+    db.commit()
+    return BulkImportResponse(imported=imported, skipped=skipped, errors=errors)
+
+
+@router.get("/plugins")
+def list_plugins():
+    return {"plugins": plugin_manager.list_plugin_names()}

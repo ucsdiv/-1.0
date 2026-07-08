@@ -115,3 +115,23 @@ class HotKeywordOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class BulkImportItem(BaseModel):
+    title: str
+    url: str
+    disk_type: str = ""
+    password: str = ""
+    content: str = ""
+    category_id: int = 0
+    tags: List[str] = Field(default_factory=list)
+
+
+class BulkImportRequest(BaseModel):
+    items: List[BulkImportItem]
+
+
+class BulkImportResponse(BaseModel):
+    imported: int
+    skipped: int
+    errors: List[str] = Field(default_factory=list)
