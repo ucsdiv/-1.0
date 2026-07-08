@@ -10,6 +10,8 @@ from app.plugins.hunhepan import HunhepanPlugin
 from app.plugins.panzun import PanzunPlugin
 from app.plugins.pan666 import Pan666Plugin
 from app.plugins.yunso import YunsoPlugin
+from app.plugins.jikepan import JikepanPlugin
+from app.plugins.panta import PantaPlugin
 
 
 class PluginManager:
@@ -24,6 +26,8 @@ class PluginManager:
         self.register(PanzunPlugin())
         self.register(Pan666Plugin())
         self.register(YunsoPlugin())
+        self.register(JikepanPlugin())
+        self.register(PantaPlugin())
 
     def register(self, plugin: PluginBase) -> None:
         self._plugins.append(plugin)

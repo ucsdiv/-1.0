@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.schemas import SearchRequest, SearchResponse
+from app.services.plugin_manager import plugin_manager
 from app.services.search_service import perform_search
 
 router = APIRouter(prefix="/api", tags=["search"])
@@ -24,3 +25,16 @@ async def search_get(
 ):
     payload = SearchRequest(kw=kw, res=res, src=src, limit=limit)
     return await perform_search(db, payload, client_ip=req.client.host if req and req.client else "")
+
+
+@router.get("/sources")
+async def list_sources():
+    plugins = [
+        {"name": p.name, "enabled": p.enabled, "timeout": p.timeout}
+        for p in plugin_manager._plugins
+    ]
+    return {
+        "total": len(plugins),
+        "enabled": len(plugin_manager.plugins),
+        "plugins": plugins,
+    }

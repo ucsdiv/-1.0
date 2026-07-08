@@ -16,8 +16,8 @@ class Settings(BaseSettings):
     native_plugins_enabled: bool = True
 
     cache_ttl: int = 300
-    plugin_timeout: float = 2.5
-    search_timeout: float = 4.0
+    plugin_timeout: float = 3.0
+    search_timeout: float = 5.0
     max_concurrent_plugins: int = 8
 
     class Config:
