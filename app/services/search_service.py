@@ -1,7 +1,7 @@
 import asyncio
 import hashlib
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Tuple
 
 from sqlalchemy import or_
@@ -11,6 +11,18 @@ from app.config import settings
 from app.models import Resource, SearchLog
 from app.schemas import SearchRequest, SearchResponse, SearchResult, Link
 from app.services.plugin_manager import plugin_manager
+
+
+_SORT_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+
+def _to_sort_dt(value: datetime | None) -> datetime:
+    """Normalize aware/naive datetimes for stable sorting."""
+    if value is None:
+        return _SORT_EPOCH
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 # Simple in-memory cache with TTL for search plugin results
@@ -86,7 +98,7 @@ async def search_plugins(keyword: str, plugin_names: List[str] | None, limit: in
         return cached
 
     per_plugin_limit = max(10, min(20, limit // max(1, len(plugins)) + 5))
-    fast_threshold = 6  # return early once we have enough quality results
+    fast_threshold = 20  # collect more results before early return to support pagination
 
     async def run_plugin(plugin):
         try:
@@ -107,7 +119,7 @@ async def search_plugins(keyword: str, plugin_names: List[str] | None, limit: in
     pending = set(tasks)
     deadline = time.time() + settings.search_timeout
     started = time.time()
-    min_fast_wait = 1.0  # seconds: let fast plugins finish before returning early
+    min_fast_wait = 2.0  # seconds: let more plugins finish before returning early
 
     while pending and time.time() < deadline:
         done, pending = await asyncio.wait(
@@ -167,7 +179,7 @@ def filter_cloud_types(results: List[SearchResult], cloud_types: List[str] | Non
     for r in results:
         links = [l for l in r.links if l.type in cloud_types]
         if links:
-            filtered.append(SearchResult(**{**r.model_dump(), "links": links}))
+            filtered.append(r.model_copy(update={"links": links}))
     return filtered
 
 
@@ -175,7 +187,9 @@ def deduplicate_results(results: List[SearchResult]) -> List[SearchResult]:
     seen = set()
     out: List[SearchResult] = []
     for r in results:
-        key = (r.title or "") + "|" + (r.links[0].url if r.links else "")
+        if not r.links:
+            continue
+        key = (r.title or "") + "|" + r.links[0].url
         if key in seen:
             continue
         seen.add(key)
@@ -187,13 +201,18 @@ async def perform_search(db: Session, request: SearchRequest, client_ip: str = "
     start = time.time()
     keyword = request.kw.strip()
 
+    # page/offset normalization: page takes precedence when explicitly set > 1 with default offset
+    offset = request.offset
+    if request.page > 1 and request.offset == 0:
+        offset = (request.page - 1) * request.limit
+
     tasks = []
     if request.src in ("all", "local"):
-        tasks.append(search_local(db, keyword, request.cloud_types, request.limit))
+        tasks.append(search_local(db, keyword, request.cloud_types, request.limit + offset))
 
     plugin_task = None
     if request.src in ("all", "upstream", "plugin"):
-        plugin_task = search_plugins(keyword, request.plugins, request.limit)
+        plugin_task = search_plugins(keyword, request.plugins, request.limit + offset)
         tasks.append(plugin_task)
 
     gathered = await asyncio.gather(*tasks)
@@ -203,18 +222,26 @@ async def perform_search(db: Session, request: SearchRequest, client_ip: str = "
 
     all_results = filter_cloud_types(all_results, request.cloud_types)
     all_results = deduplicate_results(all_results)
-    all_results.sort(key=lambda x: x.published_at or datetime.min, reverse=True)
-    merged = merge_by_type(all_results)
+    all_results.sort(key=lambda x: _to_sort_dt(x.published_at), reverse=True)
 
-    log = SearchLog(keyword=keyword, ip=client_ip, results_count=len(all_results))
+    total = len(all_results)
+    paged = all_results[offset:offset + request.limit]
+    merged = merge_by_type(paged if request.res != "merge" else all_results)
+
+    log = SearchLog(keyword=keyword, ip=client_ip, results_count=total)
     db.add(log)
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
     elapsed_ms = round((time.time() - start) * 1000, 2)
+    has_more = offset + request.limit < total
 
     if request.res == "results":
-        return SearchResponse(total=len(all_results), results=all_results, merged_by_type={}, elapsed_ms=elapsed_ms)
+        return SearchResponse(total=total, results=paged, merged_by_type={}, elapsed_ms=elapsed_ms, has_more=has_more)
     elif request.res == "merge":
-        return SearchResponse(total=sum(len(v) for v in merged.values()), results=[], merged_by_type=merged, elapsed_ms=elapsed_ms)
+        return SearchResponse(total=sum(len(v) for v in merged.values()), results=[], merged_by_type=merged, elapsed_ms=elapsed_ms, has_more=has_more)
     else:
-        return SearchResponse(total=len(all_results), results=all_results, merged_by_type=merged, elapsed_ms=elapsed_ms)
+        return SearchResponse(total=total, results=paged, merged_by_type=merged, elapsed_ms=elapsed_ms, has_more=has_more)

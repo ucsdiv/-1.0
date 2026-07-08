@@ -31,6 +31,8 @@ class SearchRequest(BaseModel):
     plugins: Optional[List[str]] = None
     cloud_types: Optional[List[str]] = None
     limit: int = Field(default=50, ge=1, le=200)
+    offset: int = Field(default=0, ge=0)
+    page: int = Field(default=1, ge=1)
 
 
 class SearchResponse(BaseModel):
@@ -38,6 +40,7 @@ class SearchResponse(BaseModel):
     results: List[SearchResult]
     merged_by_type: Dict[str, List[Link]]
     elapsed_ms: float
+    has_more: bool = False
 
 
 class CheckItem(BaseModel):

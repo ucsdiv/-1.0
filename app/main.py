@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -37,6 +37,14 @@ async def root():
     if index_file.exists():
         return FileResponse(index_file)
     return {"message": "PanSou Python API", "docs": "/docs"}
+
+
+@app.get("/admin.html")
+async def admin_page():
+    admin_file = static_dir / "admin.html"
+    if admin_file.exists():
+        return FileResponse(admin_file)
+    raise HTTPException(status_code=404, detail="Admin page not found")
 
 
 if __name__ == "__main__":

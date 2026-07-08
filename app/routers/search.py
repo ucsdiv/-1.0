@@ -20,10 +20,12 @@ async def search_get(
     res: str = "merge",
     src: str = "all",
     limit: int = 50,
+    offset: int = 0,
+    page: int = 1,
     req: Request = None,
     db: Session = Depends(get_db),
 ):
-    payload = SearchRequest(kw=kw, res=res, src=src, limit=limit)
+    payload = SearchRequest(kw=kw, res=res, src=src, limit=limit, offset=offset, page=page)
     return await perform_search(db, payload, client_ip=req.client.host if req and req.client else "")
 
 
