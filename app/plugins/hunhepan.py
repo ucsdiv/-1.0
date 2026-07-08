@@ -23,7 +23,7 @@ class HunhepanPlugin(PluginBase):
 
     async def search(self, keyword: str, limit: int = 20) -> List[SearchResult]:
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            tasks = [self._search_api(client, api, keyword) for api in self.apis]
+            tasks = [self._search_api_first_page(client, api, keyword) for api in self.apis]
             gathered = await asyncio.gather(*tasks, return_exceptions=True)
 
         all_items: List[Dict[str, Any]] = []
@@ -34,36 +34,34 @@ class HunhepanPlugin(PluginBase):
         unique = self._dedupe(all_items)
         return self._convert(unique)[:limit]
 
-    async def _search_api(self, client: httpx.AsyncClient, api_url: str, keyword: str) -> List[Dict[str, Any]]:
-        items: List[Dict[str, Any]] = []
-        for page in range(1, 4):
-            body = {
-                "page": page,
-                "q": keyword,
-                "user": "",
-                "exact": False,
-                "format": [],
-                "share_time": "",
-                "size": 30,
-                "type": "",
-                "exclude_user": [],
-                "adv_params": {"wechat_pwd": "", "platform": "pc"},
-            }
-            headers = {
-                "Content-Type": "application/json",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "Accept": "application/json, text/plain, */*",
-                "Referer": self._referer(api_url),
-            }
-            try:
-                resp = await client.post(api_url, json=body, headers=headers)
-                resp.raise_for_status()
-                data = resp.json()
-                if data.get("code") == 200:
-                    items.extend(data.get("data", {}).get("list", []))
-            except Exception:
-                break
-        return items
+    async def _search_api_first_page(self, client: httpx.AsyncClient, api_url: str, keyword: str) -> List[Dict[str, Any]]:
+        body = {
+            "page": 1,
+            "q": keyword,
+            "user": "",
+            "exact": False,
+            "format": [],
+            "share_time": "",
+            "size": 30,
+            "type": "",
+            "exclude_user": [],
+            "adv_params": {"wechat_pwd": "", "platform": "pc"},
+        }
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "application/json, text/plain, */*",
+            "Referer": self._referer(api_url),
+        }
+        try:
+            resp = await client.post(api_url, json=body, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+            if data.get("code") == 200:
+                return data.get("data", {}).get("list", [])
+        except Exception:
+            pass
+        return []
 
     def _referer(self, api_url: str) -> str:
         if "qkpanso.com" in api_url:

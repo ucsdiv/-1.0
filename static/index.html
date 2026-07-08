@@ -4,378 +4,840 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>PanSou 网盘搜索</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    animation: {
+                        'fade-in-up': 'fadeInUp 0.5s ease-out forwards',
+                        'pulse-slow': 'pulseSlow 8s ease-in-out infinite',
+                        'spin-slow': 'spin 0.7s linear infinite',
+                    },
+                    keyframes: {
+                        fadeInUp: {
+                            '0%': { opacity: '0', transform: 'translateY(20px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                        pulseSlow: {
+                            '0%, 100%': { transform: 'translateX(-50%) scale(1)', opacity: '0.3' },
+                            '50%': { transform: 'translateX(-50%) scale(1.1)', opacity: '0.5' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
     <style>
-        :root {
-            --bg: #0f0f11;
-            --surface: #18181b;
-            --surface-2: #232329;
-            --text: #f4f4f5;
-            --muted: #a1a1aa;
-            --primary: #8b5cf6;
-            --primary-2: #6366f1;
-            --radius: 16px;
-            --shadow: 0 8px 32px rgba(0,0,0,0.35);
+        /* Remove default focus outlines, use custom focus-visible */
+        *:focus { outline: none; }
+        *:focus-visible {
+            outline: 2px solid #6366f1;
+            outline-offset: 2px;
         }
-        * { box-sizing: border-box; }
-        html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
-        .hero {
-            position: relative;
-            padding: 80px 20px 100px;
-            text-align: center;
-            background: radial-gradient(circle at 30% 20%, rgba(139,92,246,0.25), transparent 40%),
-                        radial-gradient(circle at 80% 40%, rgba(99,102,241,0.2), transparent 45%),
-                        var(--bg);
+        button:focus-visible, a:focus-visible, input:focus-visible { outline-offset: 3px; }
+        button, a, input { -webkit-tap-highlight-color: transparent; }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #d4d4d4; border-radius: 4px; }
+        .dark ::-webkit-scrollbar-thumb { background: #404040; }
+
+        /* Grid background */
+        .hero-grid {
+            background-image: linear-gradient(to right, rgba(128,128,128,0.08) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(128,128,128,0.08) 1px, transparent 1px);
+            background-size: 24px 24px;
+            mask-image: radial-gradient(circle at center, black 0%, transparent 70%);
+            -webkit-mask-image: radial-gradient(circle at center, black 0%, transparent 70%);
         }
-        .hero h1 { margin: 0 0 10px; font-size: 34px; font-weight: 800; letter-spacing: -0.5px; }
-        .hero p { margin: 0; color: var(--muted); font-size: 15px; }
-        .search-wrap {
-            max-width: 720px;
-            margin: -38px auto 24px;
-            padding: 0 16px;
-            position: relative;
-            z-index: 10;
-        }
-        .search-box {
-            display: flex;
-            align-items: center;
-            background: var(--surface);
-            border: 1px solid rgba(255,255,255,0.08);
-            border-radius: var(--radius);
-            box-shadow: var(--shadow);
-            padding: 6px;
-            transition: border-color .2s;
-        }
-        .search-box:focus-within { border-color: rgba(139,92,246,0.45); }
-        .search-icon { width: 22px; height: 22px; margin: 0 12px; color: var(--muted); flex-shrink: 0; }
-        .search-input {
-            flex: 1;
-            border: none;
-            background: transparent;
-            color: var(--text);
-            font-size: 16px;
-            padding: 14px 6px;
-            outline: none;
-        }
-        .search-input::placeholder { color: #71717a; }
-        .search-btn {
-            border: none;
-            background: linear-gradient(135deg, var(--primary), var(--primary-2));
-            color: white;
-            padding: 12px 24px;
-            border-radius: 12px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            flex-shrink: 0;
-        }
-        .search-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-        .container {
-            max-width: 860px;
-            margin: 0 auto;
-            padding: 0 16px 60px;
-        }
-        .tabs {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 14px;
-        }
-        .tab {
-            padding: 10px 18px;
-            border-radius: 999px;
-            background: var(--surface);
-            border: 1px solid rgba(255,255,255,0.06);
-            color: var(--muted);
-            font-size: 14px;
-            cursor: pointer;
-        }
-        .tab.active { color: white; background: var(--surface-2); border-color: rgba(139,92,246,0.35); }
-        .filters {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 18px;
-            overflow-x: auto;
-            padding-bottom: 4px;
-            scrollbar-width: none;
-        }
-        .filters::-webkit-scrollbar { display: none; }
-        .filter-btn {
-            border: 1px solid rgba(255,255,255,0.08);
-            background: var(--surface);
-            color: var(--muted);
-            padding: 7px 14px;
-            border-radius: 999px;
-            font-size: 13px;
-            white-space: nowrap;
-            cursor: pointer;
-        }
-        .filter-btn.active { background: rgba(139,92,246,0.18); color: #c4b5fd; border-color: rgba(139,92,246,0.4); }
-        .stats {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            color: var(--muted);
-            font-size: 13px;
-            margin-bottom: 14px;
-        }
-        .result-card {
-            background: var(--surface);
-            border: 1px solid rgba(255,255,255,0.06);
-            border-radius: var(--radius);
-            padding: 18px;
-            margin-bottom: 14px;
-            transition: transform .15s, border-color .15s;
-        }
-        .result-card:hover { border-color: rgba(255,255,255,0.12); }
-        .result-header { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 10px; }
-        .result-title { font-size: 16px; font-weight: 600; line-height: 1.4; margin: 0; color: var(--text); }
-        .result-meta { font-size: 12px; color: var(--muted); margin-top: 6px; }
-        .result-type { font-size: 12px; color: #c4b5fd; background: rgba(139,92,246,0.14); padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
-        .links { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
-        .link-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 10px;
-            background: var(--surface-2);
-            border-radius: 12px;
-            padding: 12px;
-        }
-        .link-info { flex: 1; min-width: 0; }
-        .link-url {
-            display: block;
-            font-size: 13px;
-            color: #a5b4fc;
-            word-break: break-all;
-            text-decoration: none;
-        }
-        .link-pwd { font-size: 12px; color: var(--muted); margin-top: 4px; }
-        .link-badge {
-            display: inline-block;
-            font-size: 11px;
-            padding: 3px 10px;
-            border-radius: 999px;
-            background: rgba(99,102,241,0.15);
-            color: #a5b4fc;
-            margin-bottom: 6px;
-        }
-        .copy-btn {
-            border: 1px solid rgba(255,255,255,0.1);
-            background: transparent;
-            color: var(--text);
-            padding: 7px 12px;
-            border-radius: 8px;
-            font-size: 12px;
-            cursor: pointer;
-            flex-shrink: 0;
-        }
-        .copy-btn:active { background: rgba(255,255,255,0.08); }
-        .empty, .loading { text-align: center; padding: 60px 20px; color: var(--muted); }
-        .spinner {
-            width: 28px; height: 28px;
-            border: 3px solid rgba(139,92,246,0.25);
-            border-top-color: var(--primary);
-            border-radius: 50%;
-            animation: spin .8s linear infinite;
-            margin: 0 auto 14px;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .toast {
-            position: fixed;
-            bottom: 24px;
-            left: 50%;
-            transform: translateX(-50%) translateY(100px);
-            background: var(--surface-2);
-            color: var(--text);
-            padding: 12px 22px;
-            border-radius: 999px;
-            font-size: 14px;
+
+        /* Result item stagger animation */
+        .result-item {
             opacity: 0;
-            transition: all .25s ease;
-            z-index: 100;
-            border: 1px solid rgba(255,255,255,0.08);
+            animation: fadeInUp 0.4s ease-out forwards;
         }
-        .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-        .admin-bar {
-            position: fixed;
-            top: 12px;
-            right: 12px;
-            z-index: 50;
+
+        /* Loading shimmer */
+        .shimmer {
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
         }
-        .admin-bar a {
-            color: var(--muted);
-            text-decoration: none;
-            font-size: 13px;
-            padding: 6px 12px;
-            border-radius: 999px;
-            background: var(--surface);
-            border: 1px solid rgba(255,255,255,0.06);
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
         }
-        @media (max-width: 640px) {
-            .hero { padding: 60px 16px 80px; }
-            .hero h1 { font-size: 26px; }
-            .search-input { padding: 12px 4px; font-size: 15px; }
-            .search-btn { padding: 11px 16px; font-size: 14px; }
-            .result-header { flex-direction: column; gap: 8px; }
+
+        /* Line clamp */
+        .line-clamp-3 {
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        /* Modal transition */
+        .modal-overlay {
+            transition: opacity 0.25s ease;
+        }
+        .modal-content {
+            transition: transform 0.3s cubic-bezier(0.2,0,0.2,1), opacity 0.25s ease;
+        }
+
+        /* Toast */
+        .toast {
+            transition: all 0.3s cubic-bezier(0.2,0,0.2,1);
+        }
+
+        /* Star progress */
+        .star-progress-bar {
+            transition: width 0.2s linear;
         }
     </style>
 </head>
-<body>
-    <div class="admin-bar"><a href="/admin.html">管理</a></div>
-    <div class="hero">
-        <h1>PanSou 网盘搜索</h1>
-        <p>聚合百度、阿里、夸克、天翼、UC、迅雷等全网网盘资源</p>
-    </div>
+<body class="min-h-screen bg-white dark:bg-black text-black dark:text-white overflow-x-hidden selection:bg-black selection:text-white dark:selection:bg-white dark:selection:text-black transition-colors duration-300">
 
-    <div class="search-wrap">
-        <div class="search-box">
-            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-            <input type="text" class="search-input" id="kw" placeholder="输入关键词搜索网盘资源..." onkeydown="if(event.key==='Enter') search()">
-            <button class="search-btn" id="searchBtn" onclick="search()">搜索</button>
+    <!-- Navbar -->
+    <nav class="fixed top-0 left-0 right-0 z-50 border-b border-neutral-200 dark:border-neutral-800 bg-white/80 dark:bg-black/80 backdrop-blur-md transition-colors duration-300">
+        <div class="container mx-auto px-4 h-16 flex items-center justify-between">
+            <a href="/" class="text-xl md:text-2xl font-bold tracking-tighter">
+                PanSou<span class="bg-black text-white dark:bg-white dark:text-black px-1.5 ml-1 rounded">Search</span>
+            </a>
+
+            <div class="hidden md:flex items-center gap-8">
+                <a href="#" class="text-sm font-medium text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white transition-colors">社区</a>
+                <a href="#drives" class="text-sm font-medium text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white transition-colors">网盘</a>
+                <a href="#about" class="text-sm font-medium text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white transition-colors">关于</a>
+                <a href="/admin.html" class="text-sm font-medium text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white transition-colors">管理</a>
+            </div>
+
+            <div class="hidden md:flex items-center gap-3">
+                <a href="https://github.com/ucsdiv/-1.0" target="_blank" rel="noopener" class="p-2 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors" aria-label="GitHub">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                </a>
+                <div class="relative" id="langDropdown">
+                    <button id="langBtn" class="p-2 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors flex items-center gap-1 text-xs font-bold border border-neutral-200 dark:border-neutral-800">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m4.1 7.5 15.8 0M12 22V4"/></svg>
+                        <span id="langLabel">ZH</span>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                    </button>
+                    <div id="langMenu" class="absolute right-0 top-full mt-2 w-40 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg shadow-lg overflow-hidden py-1 hidden opacity-0 transform translate-y-2 transition-all duration-200">
+                        <button onclick="setLang('zh')" class="w-full text-left px-4 py-2 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800 flex items-center justify-between lang-option" data-lang="zh">中文</button>
+                        <button onclick="setLang('en')" class="w-full text-left px-4 py-2 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800 flex items-center justify-between lang-option" data-lang="en">English</button>
+                    </div>
+                </div>
+                <button id="themeBtn" class="p-2 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors" aria-label="Toggle theme">
+                    <svg id="themeIconMoon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                    <svg id="themeIconSun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="hidden"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                </button>
+            </div>
+
+            <button id="menuBtn" class="md:hidden p-2" aria-label="Menu">
+                <svg id="menuIconOpen" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                <svg id="menuIconClose" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="hidden"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+
+        <!-- Mobile Menu -->
+        <div id="mobileMenu" class="md:hidden absolute top-16 left-0 right-0 bg-white dark:bg-black border-b border-neutral-200 dark:border-neutral-800 p-4 flex flex-col gap-4 shadow-2xl hidden opacity-0 -translate-y-4 transition-all duration-200">
+            <a href="#" class="text-lg font-medium">社区</a>
+            <a href="#drives" class="text-lg font-medium">网盘</a>
+            <a href="#about" class="text-lg font-medium">关于</a>
+            <a href="/admin.html" class="text-lg font-medium">管理</a>
+            <div class="flex flex-col gap-3 pt-4 border-t border-neutral-200 dark:border-neutral-800">
+                <a href="https://github.com/ucsdiv/-1.0" target="_blank" rel="noopener" class="flex items-center justify-center gap-2 p-3 rounded-md bg-neutral-100 dark:bg-neutral-900 font-medium">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                    GitHub
+                </a>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="setLang('zh')" class="px-3 py-2 text-sm border rounded-md transition-colors lang-option-mobile" data-lang="zh">中文</button>
+                    <button onclick="setLang('en')" class="px-3 py-2 text-sm border rounded-md transition-colors lang-option-mobile" data-lang="en">English</button>
+                </div>
+                <button id="themeBtnMobile" class="flex items-center justify-center gap-2 p-3 rounded-md bg-neutral-100 dark:bg-neutral-900">
+                    <span id="themeTextMobile">Dark Mode</span>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero -->
+    <section class="relative min-h-[60vh] flex flex-col items-center justify-center overflow-hidden pt-32 pb-16">
+        <div class="absolute inset-0 z-0 opacity-40 dark:opacity-20 pointer-events-none hero-grid"></div>
+        <div class="absolute -bottom-1/2 left-1/2 -translate-x-1/2 w-[900px] h-[900px] rounded-full border border-neutral-200 dark:border-neutral-800 -z-10 animate-pulse-slow pointer-events-none"></div>
+
+        <div class="container mx-auto px-4 z-10 flex flex-col items-center text-center">
+            <h1 id="heroTitle" class="text-3xl md:text-5xl font-black tracking-tighter mb-12 max-w-4xl animate-fade-in-up" style="animation-delay: 0.1s;">
+                聚合全网网盘资源<br>无需登录即可搜索
+            </h1>
+
+            <form id="searchForm" onsubmit="handleSearch(event)" class="w-full max-w-2xl mb-12 animate-fade-in-up" style="animation-delay: 0.3s;">
+                <div class="relative group">
+                    <div class="absolute inset-0 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-2xl blur opacity-25 group-hover:opacity-40 transition duration-1000"></div>
+                    <div class="relative bg-white dark:bg-neutral-900 rounded-2xl shadow-xl flex items-center p-2 border border-neutral-200 dark:border-neutral-800 transition-colors">
+                        <svg class="ml-4 text-neutral-400 w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                        <input id="searchInput" type="text" class="w-full bg-transparent border-none focus:outline-none px-4 py-3 text-lg placeholder:text-neutral-400 dark:placeholder:text-neutral-600 text-black dark:text-white" placeholder="搜索网盘资源…" autocomplete="off">
+                        <button id="searchBtn" type="submit" class="bg-black text-white dark:bg-white dark:text-black px-6 py-3 rounded-xl font-semibold hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 active:scale-95">
+                            <svg id="btnSpinner" class="hidden w-5 h-5 animate-spin-slow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                            <span id="btnText">搜索</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="loadingBar" class="mt-4 flex items-center justify-center gap-2 text-neutral-500 opacity-0 transform translate-y-2 transition-all duration-200 pointer-events-none">
+                    <svg class="w-4 h-4 animate-spin-slow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                    <span id="loadingText" class="text-sm font-medium animate-pulse">正在查找更多资源…</span>
+                </div>
+            </form>
+        </div>
+    </section>
+
+    <!-- Results Section -->
+    <section class="container mx-auto px-4 pb-20">
+        <div id="resultsContainer"></div>
+    </section>
+
+    <!-- Supported Drives -->
+    <section id="drives" class="container mx-auto px-4 mb-20">
+        <div class="text-center mb-10">
+            <h2 id="drivesTitle" class="text-sm font-bold mb-6 text-neutral-400 uppercase tracking-widest">支持以下网盘</h2>
+            <div id="drivesGrid" class="flex flex-wrap justify-center gap-4 md:gap-8"></div>
+        </div>
+    </section>
+
+    <!-- About -->
+    <section id="about" class="py-24 bg-neutral-50 dark:bg-neutral-950 border-t border-neutral-200 dark:border-neutral-800">
+        <div class="container mx-auto px-4">
+            <div class="max-w-4xl mx-auto text-center">
+                <h2 id="aboutTitle" class="text-3xl md:text-5xl font-bold tracking-tighter mb-8">关于 PanSou</h2>
+                <p id="aboutText" class="text-lg md:text-xl text-neutral-600 dark:text-neutral-400 leading-relaxed mb-16">
+                    PanSou 是一个开源的网盘资源聚合搜索工具，整合多个资源站与公开频道，支持百度、阿里、夸克、天翼、UC、迅雷、115、PikPak、移动、123 等主流网盘，无需登录即可快速搜索。
+                </p>
+                <div class="flex flex-wrap justify-center gap-4 max-w-3xl mx-auto">
+                    <div class="flex flex-col items-center justify-center gap-3 p-5 rounded-xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 hover:border-indigo-500 transition-colors w-[calc(50%-0.5rem)] md:w-auto min-w-[140px]">
+                        <div class="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                        </div>
+                        <p class="text-sm font-medium">无广告</p>
+                    </div>
+                    <div class="flex flex-col items-center justify-center gap-3 p-5 rounded-xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 hover:border-indigo-500 transition-colors w-[calc(50%-0.5rem)] md:w-auto min-w-[140px]">
+                        <div class="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                        </div>
+                        <p class="text-sm font-medium">多语言</p>
+                    </div>
+                    <div class="flex flex-col items-center justify-center gap-3 p-5 rounded-xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 hover:border-indigo-500 transition-colors w-[calc(50%-0.5rem)] md:w-auto min-w-[140px]">
+                        <div class="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                        </div>
+                        <p class="text-sm font-medium">FastAPI</p>
+                    </div>
+                    <div class="flex flex-col items-center justify-center gap-3 p-5 rounded-xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 hover:border-indigo-500 transition-colors w-[calc(50%-0.5rem)] md:w-auto min-w-[140px]">
+                        <div class="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m4.1 7.5 15.8 0M12 22V4"/></svg>
+                        </div>
+                        <p class="text-sm font-medium">开源</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="py-12 border-t border-neutral-200 dark:border-neutral-800 bg-white dark:bg-black text-center transition-colors duration-300">
+        <div class="container mx-auto px-4">
+            <div class="text-2xl font-bold tracking-tighter mb-8">
+                PanSou<span class="bg-black text-white dark:bg-white dark:text-black px-1.5 ml-1 rounded">Search</span>
+            </div>
+            <div class="flex flex-wrap justify-center gap-x-8 gap-y-4 mb-10 text-sm font-medium text-neutral-600 dark:text-neutral-400">
+                <a href="#" class="hover:text-black dark:hover:text-white transition-colors">用户协议</a>
+                <a href="#" class="hover:text-black dark:hover:text-white transition-colors">隐私政策</a>
+                <a href="#" class="hover:text-black dark:hover:text-white transition-colors">安全政策</a>
+                <a href="/admin.html" class="hover:text-black dark:hover:text-white transition-colors">管理后台</a>
+            </div>
+            <p class="text-xs text-neutral-500">Copyright © <span id="year"></span> PanSou. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <!-- Source Picker Modal -->
+    <div id="sourceModal" class="modal-overlay fixed inset-0 z-50 flex items-center justify-center px-4 opacity-0 pointer-events-none">
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onclick="closeSourceModal()"></div>
+        <div class="modal-content relative z-10 w-full max-w-lg bg-white/90 dark:bg-black/80 backdrop-blur-2xl shadow-2xl border border-white/40 dark:border-white/10 px-6 py-5 rounded-[32px] scale-95 opacity-0">
+            <div class="flex items-center justify-between mb-4">
+                <p id="sourceModalTitle" class="text-lg font-semibold">选择来源</p>
+                <button onclick="closeSourceModal()" class="p-2 rounded-full bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div id="sourceGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2"></div>
         </div>
     </div>
 
-    <div class="container">
-        <div class="tabs">
-            <div class="tab active" data-res="merge" onclick="setRes('merge')">按网盘分类</div>
-            <div class="tab" data-res="results" onclick="setRes('results')">全部结果</div>
-        </div>
-
-        <div class="filters" id="filters">
-            <button class="filter-btn active" data-type="all" onclick="setType('all')">全部</button>
-            <button class="filter-btn" data-type="baidu" onclick="setType('baidu')">百度</button>
-            <button class="filter-btn" data-type="aliyun" onclick="setType('aliyun')">阿里</button>
-            <button class="filter-btn" data-type="quark" onclick="setType('quark')">夸克</button>
-            <button class="filter-btn" data-type="tianyi" onclick="setType('tianyi')">天翼</button>
-            <button class="filter-btn" data-type="uc" onclick="setType('uc')">UC</button>
-            <button class="filter-btn" data-type="xunlei" onclick="setType('xunlei')">迅雷</button>
-            <button class="filter-btn" data-type="115" onclick="setType('115')">115</button>
-            <button class="filter-btn" data-type="pikpak" onclick="setType('pikpak')">PikPak</button>
-            <button class="filter-btn" data-type="mobile" onclick="setType('mobile')">移动</button>
-            <button class="filter-btn" data-type="123" onclick="setType('123')">123</button>
-        </div>
-
-        <div class="stats" id="stats"></div>
-
-        <div id="results">
-            <div class="empty">输入关键词，聚合搜索全网网盘资源</div>
+    <!-- Drive Picker Modal -->
+    <div id="driveModal" class="modal-overlay fixed inset-0 z-50 flex items-center justify-center px-4 opacity-0 pointer-events-none">
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onclick="closeDriveModal()"></div>
+        <div class="modal-content relative z-10 w-full max-w-lg bg-white/90 dark:bg-black/80 backdrop-blur-2xl shadow-2xl border border-white/40 dark:border-white/10 px-6 py-5 rounded-[32px] scale-95 opacity-0">
+            <div class="flex items-center justify-between mb-4">
+                <p id="driveModalTitle" class="text-lg font-semibold">选择网盘</p>
+                <button onclick="closeDriveModal()" class="p-2 rounded-full bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div id="driveGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2"></div>
         </div>
     </div>
 
-    <div class="toast" id="toast"></div>
+    <!-- Error Modal -->
+    <div id="errorModal" class="modal-overlay fixed inset-0 z-50 flex items-center justify-center px-4 opacity-0 pointer-events-none">
+        <div class="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onclick="closeErrorModal()"></div>
+        <div class="modal-content relative z-10 w-full max-w-3xl bg-white/90 dark:bg-black/80 backdrop-blur-2xl shadow-2xl border border-white/40 dark:border-white/10 px-6 py-6 rounded-[40px] scale-95 opacity-0">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    </div>
+                    <div>
+                        <p class="text-xs uppercase tracking-[0.3em] text-neutral-500">搜索异常</p>
+                        <p class="text-xl font-semibold">暂时无法完成搜索请求</p>
+                    </div>
+                </div>
+                <button onclick="closeErrorModal()" class="p-2 rounded-full bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <p id="errorText" class="text-base text-neutral-700 dark:text-neutral-200 leading-relaxed">发生未知错误，请稍后再试。</p>
+            <div id="errorDetailsBox" class="hidden mt-4 text-sm">
+                <p class="font-semibold uppercase tracking-[0.2em] text-xs text-neutral-500 mb-1">错误详情</p>
+                <p id="errorDetails" class="break-words bg-white/60 dark:bg-white/5 rounded-2xl px-4 py-3 border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-100"></p>
+            </div>
+            <div class="mt-6 flex justify-end">
+                <button onclick="closeErrorModal()" class="px-6 py-2 rounded-full bg-black text-white dark:bg-white dark:text-black font-semibold text-sm hover:opacity-90 transition-opacity active:scale-95">我知道了</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Star Card -->
+    <div id="starCard" class="fixed right-4 bottom-4 z-40 w-[92%] max-w-xs md:w-[320px] rounded-2xl bg-white/90 dark:bg-black/85 backdrop-blur-xl shadow-xl border border-neutral-200 dark:border-neutral-800 p-4 opacity-0 translate-y-3 pointer-events-none transition-all duration-300">
+        <div class="text-sm font-semibold">如果你觉得 PanSou 很好用请给我们一个 star</div>
+        <a href="https://github.com/ucsdiv/-1.0" target="_blank" rel="noopener" class="mt-3 inline-flex items-center justify-center w-full rounded-lg bg-black text-white dark:bg-white dark:text-black text-sm font-semibold px-4 py-2 hover:opacity-90 active:scale-95 transition-all">
+            GitHub Star
+        </a>
+        <div class="mt-3 h-1.5 w-full rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden">
+            <div id="starProgress" class="star-progress-bar h-full bg-black dark:bg-white" style="width: 0%"></div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast fixed bottom-6 left-1/2 -translate-x-1/2 bg-black text-white dark:bg-white dark:text-black px-6 py-3 rounded-full text-sm font-semibold opacity-0 translate-y-12 pointer-events-none z-[110]"></div>
 
     <script>
-        let currentRes = 'merge';
-        let currentType = 'all';
+        const I18N = {
+            zh: {
+                title: '聚合全网网盘资源<br>无需登录即可搜索',
+                placeholder: '搜索网盘资源…',
+                cta: '搜索',
+                loading: '正在查找更多资源…',
+                emptyQuery: '请输入搜索关键词',
+                errorGeneric: '搜索失败，请稍后重试',
+                resultsCount: '找到 {count} 条结果',
+                noResults: '暂无相关结果',
+                allSources: '全部来源',
+                selectSource: '选择来源',
+                selectDrive: '全部类型',
+                lastUpdated: '最后更新',
+                prevPage: '上一页',
+                nextPage: '下一页',
+                drivesTitle: '支持以下网盘',
+                aboutTitle: '关于 PanSou',
+                aboutText: 'PanSou 是一个开源的网盘资源聚合搜索工具，整合多个资源站与公开频道，支持百度、阿里、夸克、天翼、UC、迅雷、115、PikPak、移动、123 等主流网盘，无需登录即可快速搜索。',
+                starCallout: '如果你觉得 PanSou 很好用请给我们一个 star',
+                starCta: 'GitHub Star',
+                copied: '已复制',
+                drives: {
+                    baidu: '百度网盘', aliyun: '阿里云盘', quark: '夸克网盘', tianyi: '天翼云盘',
+                    '115': '115 网盘', pan115: '115 网盘', xunlei: '迅雷网盘', uc: 'UC 网盘', yidong: '移动云盘',
+                    pikpak: 'PikPak', '123': '123 网盘', pan123: '123 网盘', magnet: '磁力链接', ed2k: '电驴链接',
+                    google: '谷歌云盘', lanzou: '蓝奏云', others: '其他'
+                }
+            },
+            en: {
+                title: 'Aggregate netdisk resources<br>No login required',
+                placeholder: 'Search netdisk resources…',
+                cta: 'Search',
+                loading: 'Searching for more resources…',
+                emptyQuery: 'Please enter a keyword',
+                errorGeneric: 'Search failed, please try again later',
+                resultsCount: 'Found {count} results',
+                noResults: 'No results found',
+                allSources: 'All sources',
+                selectSource: 'Select source',
+                selectDrive: 'All types',
+                lastUpdated: 'Last updated',
+                prevPage: 'Prev',
+                nextPage: 'Next',
+                drivesTitle: 'Supported drives',
+                aboutTitle: 'About PanSou',
+                aboutText: 'PanSou is an open-source netdisk resource aggregator, integrating multiple resource sites and public channels. It supports Baidu, Aliyun, Quark, Tianyi, UC, Xunlei, 115, PikPak, Mobile, 123 and more without login.',
+                starCallout: 'If you find PanSou useful, please give us a star',
+                starCta: 'GitHub Star',
+                copied: 'Copied',
+                drives: {
+                    baidu: 'Baidu Netdisk', aliyun: 'Aliyun Drive', quark: 'Quark Drive', tianyi: 'Tianyi Cloud',
+                    '115': '115 Drive', pan115: '115 Drive', xunlei: 'Xunlei Drive', uc: 'UC Drive', yidong: 'Mobile Cloud',
+                    pikpak: 'PikPak', '123': '123 Drive', pan123: '123 Drive', magnet: 'Magnet', ed2k: 'eDonkey',
+                    google: 'Google Drive', lanzou: 'Lanzou', others: 'Others'
+                }
+            }
+        };
 
-        function setRes(res) {
-            currentRes = res;
-            document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.res === res));
-            search();
+        let lang = localStorage.getItem('pansou-lang') || 'zh';
+        let theme = localStorage.getItem('pansou-theme') || 'light';
+        let query = '';
+        let loading = false;
+        let hasSearched = false;
+        let resultsData = [];
+        let selectedSource = 'all';
+        let selectedDrive = 'all';
+        let selectedTags = [];
+        let currentPage = 1;
+        const pageSize = 20;
+        const FILTER_TAGS = ['1080p','2160p','4K','HEVC','x265','AV1','HDR','Dolby Vision','AAC'];
+        const DRIVE_ORDER = ['baidu','aliyun','quark','tianyi','uc','xunlei','115','pikpak','yidong','123','pan123','magnet','ed2k','google','lanzou','others'];
+
+        function t(key, vars) {
+            let text = I18N[lang][key] || I18N.zh[key] || key;
+            if (vars) text = text.replace('{count}', vars.count);
+            return text;
         }
 
-        function setType(type) {
-            currentType = type;
-            document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b.dataset.type === type));
-            search();
+        function typeName(type) {
+            return I18N[lang].drives[type] || type;
         }
 
-        async function search() {
-            const kw = document.getElementById('kw').value.trim();
-            if (!kw) return;
+        function applyTheme() {
+            document.documentElement.classList.toggle('dark', theme === 'dark');
+            const moon = document.getElementById('themeIconMoon');
+            const sun = document.getElementById('themeIconSun');
+            const mobileText = document.getElementById('themeTextMobile');
+            if (moon) moon.classList.toggle('hidden', theme === 'dark');
+            if (sun) sun.classList.toggle('hidden', theme !== 'dark');
+            if (mobileText) mobileText.textContent = theme === 'dark' ? 'Light Mode' : 'Dark Mode';
+        }
+
+        function applyLang() {
+            document.getElementById('heroTitle').innerHTML = t('title');
+            document.getElementById('searchInput').placeholder = t('placeholder');
+            document.getElementById('btnText').textContent = t('cta');
+            document.getElementById('loadingText').textContent = t('loading');
+            document.getElementById('drivesTitle').textContent = t('drivesTitle');
+            document.getElementById('aboutTitle').textContent = t('aboutTitle');
+            document.getElementById('aboutText').textContent = t('aboutText');
+            document.getElementById('sourceModalTitle').textContent = t('selectSource');
+            document.getElementById('driveModalTitle').textContent = t('selectDrive');
+            document.getElementById('langLabel').textContent = lang.toUpperCase();
+            document.querySelectorAll('.lang-option, .lang-option-mobile').forEach(btn => {
+                const isActive = btn.dataset.lang === lang;
+                if (isActive) {
+                    btn.classList.add('bg-black', 'text-white', 'dark:bg-white', 'dark:text-black', 'border-transparent');
+                    btn.classList.remove('border-neutral-200', 'dark:border-neutral-800');
+                } else {
+                    btn.classList.remove('bg-black', 'text-white', 'dark:bg-white', 'dark:text-black', 'border-transparent');
+                    btn.classList.add('border-neutral-200', 'dark:border-neutral-800');
+                }
+            });
+            renderDrives();
+            if (hasSearched) renderResults();
+        }
+
+        window.setLang = (value) => {
+            lang = value;
+            localStorage.setItem('pansou-lang', lang);
+            applyLang();
+            closeLangMenu();
+        };
+
+        function renderDrives() {
+            const drives = ['baidu','aliyun','quark','tianyi','115','xunlei','uc','yidong','pikpak','123','magnet','ed2k','google'];
+            document.getElementById('drivesGrid').innerHTML = drives.map(d => `
+                <div class="flex items-center gap-2 text-neutral-600 dark:text-neutral-400 hover:text-black dark:hover:text-white transition-colors">
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                    <span class="text-sm font-medium">${typeName(d)}</span>
+                </div>
+            `).join('');
+        }
+
+        document.getElementById('themeBtn').onclick = () => {
+            theme = theme === 'dark' ? 'light' : 'dark';
+            localStorage.setItem('pansou-theme', theme);
+            applyTheme();
+        };
+        document.getElementById('themeBtnMobile').onclick = () => {
+            theme = theme === 'dark' ? 'light' : 'dark';
+            localStorage.setItem('pansou-theme', theme);
+            applyTheme();
+        };
+
+        // Lang dropdown
+        const langBtn = document.getElementById('langBtn');
+        const langMenu = document.getElementById('langMenu');
+        let langOpen = false;
+        function openLangMenu() {
+            langOpen = true;
+            langMenu.classList.remove('hidden');
+            setTimeout(() => {
+                langMenu.classList.remove('opacity-0', 'translate-y-2');
+            }, 10);
+        }
+        function closeLangMenu() {
+            langOpen = false;
+            langMenu.classList.add('opacity-0', 'translate-y-2');
+            setTimeout(() => langMenu.classList.add('hidden'), 200);
+        }
+        langBtn.onclick = (e) => {
+            e.stopPropagation();
+            langOpen ? closeLangMenu() : openLangMenu();
+        };
+        document.addEventListener('click', () => { if (langOpen) closeLangMenu(); });
+
+        // Mobile menu
+        const mobileMenu = document.getElementById('mobileMenu');
+        let menuOpen = false;
+        document.getElementById('menuBtn').onclick = () => {
+            menuOpen = !menuOpen;
+            const openIcon = document.getElementById('menuIconOpen');
+            const closeIcon = document.getElementById('menuIconClose');
+            openIcon.classList.toggle('hidden', menuOpen);
+            closeIcon.classList.toggle('hidden', !menuOpen);
+            if (menuOpen) {
+                mobileMenu.classList.remove('hidden');
+                setTimeout(() => mobileMenu.classList.remove('opacity-0', '-translate-y-4'), 10);
+            } else {
+                mobileMenu.classList.add('opacity-0', '-translate-y-4');
+                setTimeout(() => mobileMenu.classList.add('hidden'), 200);
+            }
+        };
+
+        async function handleSearch(e) {
+            if (e) e.preventDefault();
+            query = document.getElementById('searchInput').value.trim();
+            if (!query) {
+                showError(t('emptyQuery'));
+                return;
+            }
+            doSearch();
+        }
+
+        async function doSearch() {
+            if (loading) return;
+            loading = true;
+            hasSearched = true;
+            currentPage = 1;
+            selectedSource = 'all';
+            selectedDrive = 'all';
+            selectedTags = [];
+
             const btn = document.getElementById('searchBtn');
-            const resultsEl = document.getElementById('results');
-            const statsEl = document.getElementById('stats');
+            const btnText = document.getElementById('btnText');
+            const btnSpinner = document.getElementById('btnSpinner');
+            const loadingBar = document.getElementById('loadingBar');
+
             btn.disabled = true;
-            resultsEl.innerHTML = '<div class="loading"><div class="spinner"></div>聚合搜索中...</div>';
-            statsEl.textContent = '';
+            btnText.textContent = t('cta');
+            btnSpinner.classList.remove('hidden');
+            loadingBar.classList.remove('opacity-0', 'translate-y-2');
+            document.getElementById('resultsContainer').innerHTML = '';
 
             const started = performance.now();
             try {
                 const resp = await fetch('/api/search', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        kw,
-                        res: currentRes,
-                        limit: 50,
-                        cloud_types: currentType === 'all' ? [] : [currentType],
-                    }),
+                    body: JSON.stringify({ kw: query, res: 'results', limit: 100 })
                 });
+                if (!resp.ok) {
+                    const text = await resp.text();
+                    throw new Error(text || t('errorGeneric'));
+                }
                 const data = await resp.json();
-                render(data, started);
-            } catch (e) {
-                resultsEl.innerHTML = '<div class="empty">请求失败，请检查网络或稍后重试</div>';
+                resultsData = normalizeResults(data.results || []);
+                const latency = Math.round(performance.now() - started);
+                renderResults(resultsData.length, latency);
+                startStarProgress();
+            } catch (err) {
+                showError(t('errorGeneric'), err.message);
             } finally {
+                loading = false;
                 btn.disabled = false;
+                btnText.textContent = t('cta');
+                btnSpinner.classList.add('hidden');
+                loadingBar.classList.add('opacity-0', 'translate-y-2');
             }
         }
 
-        function render(data, started) {
-            const statsEl = document.getElementById('stats');
-            const total = data.total || 0;
-            const latency = Math.round(performance.now() - started);
-            statsEl.innerHTML = `<span>共 ${total} 条结果 · ${latency}ms</span>`;
-            if (currentRes === 'merge') {
-                renderMerged(data.merged_by_type || {});
-            } else {
-                renderResults(data.results || []);
+        function normalizeResults(list) {
+            const out = [];
+            const seen = new Set();
+            for (const item of list) {
+                const title = item.title || item.content?.slice(0, 80) || item.links?.[0]?.url || 'Untitled';
+                const links = (item.links || []).filter(l => l.url);
+                if (!links.length) continue;
+                const key = title + '|' + links[0].url;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                out.push({
+                    title,
+                    content: item.content || '',
+                    links,
+                    channel: item.channel || item.source || '',
+                    datetime: item.published_at || item.datetime || '',
+                    source: item.source || item.channel || ''
+                });
             }
+            return out;
         }
 
-        function renderMerged(merged) {
-            const resultsEl = document.getElementById('results');
-            const types = Object.keys(merged);
-            if (!types.length) {
-                resultsEl.innerHTML = '<div class="empty">未找到相关资源</div>';
-                return;
+        function getFiltered() {
+            let list = resultsData;
+            if (selectedSource !== 'all') {
+                list = list.filter(r => r.channel === selectedSource || r.source === selectedSource);
             }
-            const order = ['baidu','aliyun','quark','tianyi','uc','xunlei','115','pikpak','mobile','123','magnet','ed2k','others'];
-            types.sort((a, b) => (order.indexOf(a) === -1 ? 999 : order.indexOf(a)) - (order.indexOf(b) === -1 ? 999 : order.indexOf(b)));
-            resultsEl.innerHTML = types.map(type => {
-                const items = merged[type];
-                return `<div class="result-card">
-                    <div class="result-header"><h3 class="result-title">${typeName(type)}</h3><span class="result-type">${items.length} 条</span></div>
-                    <div class="links">${items.map(linkItem).join('')}</div>
-                </div>`;
-            }).join('');
+            if (selectedDrive !== 'all') {
+                list = list.filter(r => r.links.some(l => (l.type || '').toLowerCase() === selectedDrive.toLowerCase()));
+            }
+            if (selectedTags.length) {
+                list = list.filter(r => selectedTags.every(tag => r.title.toLowerCase().includes(tag.toLowerCase())));
+            }
+            return list;
         }
 
-        function renderResults(results) {
-            const resultsEl = document.getElementById('results');
-            if (!results.length) {
-                resultsEl.innerHTML = '<div class="empty">未找到相关资源</div>';
-                return;
-            }
-            resultsEl.innerHTML = results.map(r => `<div class="result-card">
-                <div class="result-header"><h3 class="result-title">${escapeHtml(r.title)}</h3></div>
-                <div class="result-meta">来源：${r.source || '未知'}${r.published_at ? ' · ' + formatDate(r.published_at) : ''}</div>
-                ${r.content ? `<div class="result-meta">${escapeHtml(r.content.slice(0, 120))}</div>` : ''}
-                <div class="links">${(r.links || []).map(linkItem).join('')}</div>
-            </div>`).join('');
-        }
+        function renderResults(totalCount, latency) {
+            const container = document.getElementById('resultsContainer');
+            const filtered = getFiltered();
+            const sources = Array.from(new Set(resultsData.map(r => r.channel || r.source).filter(Boolean)));
+            const availableDrives = Array.from(new Set(resultsData.flatMap(r => r.links.map(l => l.type)).filter(Boolean)));
 
-        function linkItem(link) {
-            const url = link.url || '';
-            const pwd = link.password || '';
-            return `<div class="link-item">
-                <div class="link-info">
-                    <span class="link-badge">${typeName(link.type)}</span>
-                    <a class="link-url" href="${url}" target="_blank" rel="noopener">${escapeHtml(url)}</a>
-                    ${pwd ? `<div class="link-pwd">提取码：${escapeHtml(pwd)}</div>` : ''}
+            const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+            const pageItems = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+            let html = `
+                <div class="bg-white/80 dark:bg-neutral-900/70 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-6 shadow-lg animate-fade-in-up">
+                    <div class="flex flex-col gap-4 mb-6">
+                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div class="flex items-center gap-2 text-2xl font-bold">
+                                <svg class="w-6 h-6 text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                                ${t('resultsCount', { count: filtered.length })}
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2 text-sm text-neutral-600 dark:text-neutral-300">
+                                <span class="px-3 py-1 rounded-full bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700">平台来源：${sources.length}</span>
+                                <span class="px-3 py-1 rounded-full bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700">搜索延迟：${latency || 0}ms</span>
+                                <span class="px-3 py-1 rounded-full bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700">${t('lastUpdated')}：${new Date().toLocaleTimeString()}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center flex-wrap gap-3">
+                            <div class="flex items-center gap-2">
+                                <svg class="w-4 h-4 text-neutral-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                                <button onclick="openSourceModal()" class="px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-900 text-sm hover:border-indigo-500 transition-colors active:scale-95">
+                                    ${selectedSource === 'all' ? t('allSources') : selectedSource}
+                                </button>
+                            </div>
+                            ${availableDrives.length ? `
+                            <div class="flex items-center gap-2">
+                                <svg class="w-4 h-4 text-neutral-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+                                <button onclick="openDriveModal()" class="px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-900 text-sm hover:border-indigo-500 transition-colors active:scale-95">
+                                    ${selectedDrive === 'all' ? t('selectDrive') : typeName(selectedDrive)}
+                                </button>
+                            </div>` : ''}
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2 mb-6">
+                        ${FILTER_TAGS.map(tag => `
+                            <button onclick="toggleTag('${tag}')" class="px-3 py-1 rounded-full text-sm border transition-all active:scale-95 ${selectedTags.includes(tag) ? 'bg-black text-white dark:bg-white dark:text-black border-black dark:border-white' : 'bg-white dark:bg-neutral-900 text-neutral-600 dark:text-neutral-400 border-neutral-200 dark:border-neutral-800 hover:border-indigo-500'}">
+                                ${tag}
+                            </button>
+                        `).join('')}
+                    </div>
+
+                    ${renderPagination(totalPages, true)}
+
+                    ${pageItems.length ? `
+                        <div class="grid grid-cols-1 gap-6 mt-4">
+                            ${pageItems.map((item, idx) => `
+                                <article class="result-item group bg-neutral-50 dark:bg-neutral-900/50 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-5 md:p-6 hover:shadow-xl transition-all duration-300 hover:bg-white dark:hover:bg-neutral-900 hover:border-neutral-300 dark:hover:border-neutral-700" style="animation-delay: ${idx * 0.03}s">
+                                    <div class="flex flex-col gap-2">
+                                        <div class="flex items-center gap-2 flex-wrap">
+                                            <h3 class="text-lg md:text-xl font-bold text-neutral-900 dark:text-neutral-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">${escapeHtml(item.title)}</h3>
+                                            ${item.channel ? `<button onclick="setSource('${escapeHtml(item.channel)}')" class="px-2 py-1 rounded-md text-xs font-medium bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors">${escapeHtml(item.channel)}</button>` : ''}
+                                        </div>
+                                        ${item.datetime ? `<div class="flex items-center gap-2 text-xs text-neutral-500"><svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>${formatDate(item.datetime)}</div>` : ''}
+                                        ${item.content ? `<p class="text-neutral-600 dark:text-neutral-400 text-sm leading-relaxed line-clamp-3">${escapeHtml(item.content)}</p>` : ''}
+                                    </div>
+                                    <div class="mt-5 flex flex-wrap gap-3">
+                                        ${item.links.map((link, i) => `
+                                            <a href="${link.url}" target="_blank" rel="noopener" class="group/link inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 bg-white dark:bg-black border border-neutral-200 dark:border-neutral-800 hover:border-indigo-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:shadow-sm min-w-0 w-full sm:w-auto active:scale-95" oncontextmenu="copyLink(event, this)">
+                                                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                                                <span class="uppercase tracking-wider text-xs font-bold text-neutral-500 group-hover/link:text-indigo-500">${typeName(link.type || 'others')}</span>
+                                                <span class="max-w-full sm:max-w-[220px] truncate opacity-70 min-w-0">${escapeHtml(link.url)}</span>
+                                                ${link.password ? `<span class="ml-2 flex items-center gap-1 text-xs bg-neutral-100 dark:bg-neutral-900 px-2 py-0.5 rounded text-neutral-600 dark:text-neutral-400"><svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>${escapeHtml(link.password)}</span>` : ''}
+                                            </a>
+                                        `).join('')}
+                                    </div>
+                                </article>
+                            `).join('')}
+                        </div>
+                    ` : `
+                        <div class="flex flex-col items-center justify-center py-16 text-neutral-500 text-center animate-fade-in-up">
+                            <svg class="w-16 h-16 mb-4 opacity-20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                            <p class="text-lg">${t('noResults')}</p>
+                        </div>
+                    `}
+
+                    ${renderPagination(totalPages, false)}
                 </div>
-                <button class="copy-btn" onclick="copyText('${url}${pwd ? ' 提取码：'+pwd : ''}')">复制</button>
-            </div>`;
+            `;
+            container.innerHTML = html;
         }
 
-        function typeName(type) {
-            const map = {
-                baidu: '百度网盘', aliyun: '阿里云盘', quark: '夸克网盘', tianyi: '天翼云盘',
-                uc: 'UC网盘', mobile: '移动云盘', '115': '115网盘', pikpak: 'PikPak',
-                xunlei: '迅雷网盘', '123': '123网盘', google: '谷歌云盘', magnet: '磁力链接', ed2k: '电驴链接',
-                guangya: '广雅网盘', others: '其他'
-            };
-            return map[type] || type;
+        function renderPagination(totalPages, isTop) {
+            if (totalPages <= 1) return '';
+            const start = Math.max(1, currentPage - 2);
+            const end = Math.min(totalPages, start + 4);
+            let pages = [];
+            for (let i = start; i <= end; i++) pages.push(i);
+
+            return `
+                <div class="flex flex-col items-center gap-4 ${isTop ? 'mb-6' : 'mt-6'}">
+                    <div class="hidden md:flex items-center justify-center gap-2 flex-wrap">
+                        <button onclick="goPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''} class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-sm disabled:opacity-50 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors active:scale-95">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+                            ${t('prevPage')}
+                        </button>
+                        ${pages.map(p => `
+                            <button onclick="goPage(${p})" class="px-3 py-1.5 rounded-lg border text-sm transition-colors active:scale-95 ${p === currentPage ? 'bg-black text-white dark:bg-white dark:text-black border-black dark:border-white' : 'border-neutral-200 dark:border-neutral-800 hover:border-indigo-500'}">${p}</button>
+                        `).join('')}
+                        <button onclick="goPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''} class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-sm disabled:opacity-50 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors active:scale-95">
+                            ${t('nextPage')}
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+                        </button>
+                    </div>
+                    <div class="md:hidden flex items-center justify-center gap-4 w-full max-w-xs">
+                        <button onclick="goPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''} class="flex-1 inline-flex items-center justify-center gap-1 px-4 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 text-sm disabled:opacity-50 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors active:scale-95">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg> ${t('prevPage')}
+                        </button>
+                        <button onclick="goPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''} class="flex-1 inline-flex items-center justify-center gap-1 px-4 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 text-sm disabled:opacity-50 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors active:scale-95">
+                            ${t('nextPage')} <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+                        </button>
+                    </div>
+                    <div class="md:hidden flex items-center justify-center gap-2 flex-wrap">
+                        ${pages.map(p => `
+                            <button onclick="goPage(${p})" class="px-3 py-1.5 rounded-lg border text-sm transition-colors active:scale-95 ${p === currentPage ? 'bg-black text-white dark:bg-white dark:text-black border-black dark:border-white' : 'border-neutral-200 dark:border-neutral-800 hover:border-indigo-500'}">${p}</button>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
         }
+
+        window.goPage = (p) => {
+            currentPage = Math.max(1, Math.min(p, Math.ceil(getFiltered().length / pageSize)));
+            renderResults();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
+        window.toggleTag = (tag) => {
+            selectedTags = selectedTags.includes(tag) ? selectedTags.filter(t => t !== tag) : [...selectedTags, tag];
+            currentPage = 1;
+            renderResults();
+        };
+
+        window.setSource = (source) => {
+            selectedSource = source;
+            currentPage = 1;
+            renderResults();
+        };
+
+        window.openSourceModal = () => {
+            const sources = Array.from(new Set(resultsData.map(r => r.channel || r.source).filter(Boolean)));
+            const grid = document.getElementById('sourceGrid');
+            grid.innerHTML = ['all', ...sources].map(src => `
+                <button onclick="selectSource('${src.replace(/'/g, "\\'")}')" class="px-2 py-1.5 rounded-lg border text-xs sm:text-sm text-left transition-colors active:scale-95 ${(src === 'all' && selectedSource === 'all') || src === selectedSource ? 'bg-black text-white dark:bg-white dark:text-black border-black dark:border-white' : 'border-neutral-200 dark:border-neutral-800 hover:border-indigo-500'}">
+                    ${src === 'all' ? t('allSources') : escapeHtml(src)}
+                </button>
+            `).join('');
+            openModal('sourceModal');
+        };
+
+        window.selectSource = (src) => {
+            selectedSource = src;
+            currentPage = 1;
+            renderResults();
+            closeSourceModal();
+        };
+
+        window.openDriveModal = () => {
+            const drives = Array.from(new Set(resultsData.flatMap(r => r.links.map(l => l.type)).filter(Boolean)))
+                .sort((a, b) => DRIVE_ORDER.indexOf(a) - DRIVE_ORDER.indexOf(b));
+            const grid = document.getElementById('driveGrid');
+            grid.innerHTML = ['all', ...drives].map(type => `
+                <button onclick="selectDrive('${type.replace(/'/g, "\\'")}')" class="px-2 py-1.5 rounded-lg border text-xs sm:text-sm text-left transition-colors active:scale-95 ${(type === 'all' && selectedDrive === 'all') || type === selectedDrive ? 'bg-black text-white dark:bg-white dark:text-black border-black dark:border-white' : 'border-neutral-200 dark:border-neutral-800 hover:border-indigo-500'}">
+                    ${type === 'all' ? t('selectDrive') : typeName(type)}
+                </button>
+            `).join('');
+            openModal('driveModal');
+        };
+
+        window.selectDrive = (type) => {
+            selectedDrive = type;
+            currentPage = 1;
+            renderResults();
+            closeDriveModal();
+        };
+
+        function openModal(id) {
+            const modal = document.getElementById(id);
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            modal.querySelector('.modal-content').classList.remove('scale-95', 'opacity-0');
+        }
+
+        function closeModal(id) {
+            const modal = document.getElementById(id);
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            modal.querySelector('.modal-content').classList.add('scale-95', 'opacity-0');
+        }
+
+        window.closeSourceModal = () => closeModal('sourceModal');
+        window.closeDriveModal = () => closeModal('driveModal');
+
+        function showError(msg, details) {
+            document.getElementById('errorText').textContent = msg;
+            const box = document.getElementById('errorDetailsBox');
+            const det = document.getElementById('errorDetails');
+            if (details) {
+                det.textContent = details;
+                box.classList.remove('hidden');
+            } else {
+                box.classList.add('hidden');
+            }
+            openModal('errorModal');
+        }
+        window.closeErrorModal = () => closeModal('errorModal');
+
+        function showToast(msg) {
+            const el = document.getElementById('toast');
+            el.textContent = msg;
+            el.classList.remove('opacity-0', 'translate-y-12', 'pointer-events-none');
+            setTimeout(() => el.classList.add('opacity-0', 'translate-y-12', 'pointer-events-none'), 2000);
+        }
+
+        window.copyLink = (e, el) => {
+            e.preventDefault();
+            const url = el.getAttribute('href');
+            const pwdEl = el.querySelector('.pwd');
+            const pwd = pwdEl ? pwdEl.textContent.trim() : '';
+            const text = url + (pwd ? ' 密码：' + pwd : '');
+            navigator.clipboard.writeText(text).then(() => showToast(t('copied')));
+        };
 
         function escapeHtml(text) {
             const div = document.createElement('div');
@@ -389,20 +851,28 @@
             return isNaN(d.getTime()) ? '' : d.toLocaleString();
         }
 
-        function copyText(text) {
-            if (navigator.clipboard) {
-                navigator.clipboard.writeText(text).then(() => showToast('已复制到剪贴板'));
-            } else {
-                prompt('请手动复制', text);
+        function startStarProgress() {
+            const card = document.getElementById('starCard');
+            const bar = document.getElementById('starProgress');
+            card.classList.remove('opacity-0', 'translate-y-3', 'pointer-events-none');
+            let pct = 0;
+            const dur = 10000;
+            const start = performance.now();
+            function tick() {
+                const elapsed = performance.now() - start;
+                pct = Math.min(100, (elapsed / dur) * 100);
+                bar.style.width = pct + '%';
+                if (pct < 100) requestAnimationFrame(tick);
+                else setTimeout(() => card.classList.add('opacity-0', 'translate-y-3', 'pointer-events-none'), 500);
             }
+            requestAnimationFrame(tick);
         }
 
-        function showToast(msg) {
-            const el = document.getElementById('toast');
-            el.textContent = msg;
-            el.classList.add('show');
-            setTimeout(() => el.classList.remove('show'), 2000);
-        }
+        // Init
+        document.getElementById('year').textContent = new Date().getFullYear();
+        applyTheme();
+        applyLang();
+        document.getElementById('searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') handleSearch(); });
     </script>
 </body>
 </html>

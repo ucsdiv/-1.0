@@ -1,7 +1,8 @@
 import asyncio
+import hashlib
 import time
 from datetime import datetime
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -10,6 +11,36 @@ from app.config import settings
 from app.models import Resource, SearchLog
 from app.schemas import SearchRequest, SearchResponse, SearchResult, Link
 from app.services.plugin_manager import plugin_manager
+
+
+# Simple in-memory cache with TTL for search plugin results
+_search_cache: Dict[str, Tuple[float, List[SearchResult]]] = {}
+
+
+def _cache_key(keyword: str, plugins: Tuple[str, ...], cloud_types: Tuple[str, ...] | None) -> str:
+    raw = f"{keyword}|{plugins}|{cloud_types}"
+    return hashlib.md5(raw.encode()).hexdigest()
+
+
+def _get_cached(keyword: str, plugins: Tuple[str, ...], cloud_types: Tuple[str, ...] | None) -> List[SearchResult] | None:
+    if settings.cache_ttl <= 0:
+        return None
+    key = _cache_key(keyword, plugins, cloud_types)
+    entry = _search_cache.get(key)
+    if not entry:
+        return None
+    cached_at, results = entry
+    if time.time() - cached_at > settings.cache_ttl:
+        _search_cache.pop(key, None)
+        return None
+    return results
+
+
+def _set_cached(keyword: str, plugins: Tuple[str, ...], cloud_types: Tuple[str, ...] | None, results: List[SearchResult]) -> None:
+    if settings.cache_ttl <= 0:
+        return
+    key = _cache_key(keyword, plugins, cloud_types)
+    _search_cache[key] = (time.time(), results)
 
 
 async def search_local(db: Session, keyword: str, cloud_types: List[str] | None, limit: int) -> List[SearchResult]:
@@ -49,21 +80,62 @@ async def search_plugins(keyword: str, plugin_names: List[str] | None, limit: in
     if not plugins:
         return []
 
-    per_plugin_limit = max(1, limit // max(1, len(plugins)) + 5)
+    cache_plugins = tuple(sorted(p.name for p in plugins))
+    cached = _get_cached(keyword, cache_plugins, None)
+    if cached is not None:
+        return cached
+
+    per_plugin_limit = max(1, min(20, limit // max(1, len(plugins)) + 5))
 
     async def run_plugin(plugin):
         try:
-            return await asyncio.wait_for(plugin.search(keyword, per_plugin_limit), timeout=plugin.timeout)
+            return await asyncio.wait_for(plugin.search(keyword, per_plugin_limit), timeout=min(plugin.timeout, settings.plugin_timeout))
         except Exception:
             return []
 
-    tasks = [run_plugin(p) for p in plugins]
-    gathered = await asyncio.gather(*tasks, return_exceptions=True)
+    # Limit concurrent plugins to avoid overwhelming the event loop / network
+    semaphore = asyncio.Semaphore(max(1, settings.max_concurrent_plugins))
+
+    async def run_with_semaphore(plugin):
+        async with semaphore:
+            return await run_plugin(plugin)
+
+    tasks = [asyncio.create_task(run_with_semaphore(p)) for p in plugins]
 
     results: List[SearchResult] = []
-    for item in gathered:
-        if isinstance(item, list):
-            results.extend(item)
+    pending = set(tasks)
+    deadline = time.time() + settings.search_timeout
+    started = time.time()
+    min_fast_wait = 1.2  # return early once we have enough results and waited at least this long (seconds)
+
+    while pending and time.time() < deadline:
+        done, pending = await asyncio.wait(
+            pending, return_when=asyncio.FIRST_COMPLETED, timeout=max(0.1, deadline - time.time())
+        )
+        for task in done:
+            item = task.result()
+            if isinstance(item, list):
+                results.extend(item)
+            if len(results) >= limit * 2:
+                for t in pending:
+                    t.cancel()
+                _set_cached(keyword, cache_plugins, None, results[:limit * 3])
+                return results[:limit * 3]
+        if len(results) >= limit and (time.time() - started) >= min_fast_wait:
+            for t in pending:
+                t.cancel()
+            _set_cached(keyword, cache_plugins, None, results[:limit * 3])
+            return results[:limit * 3]
+
+    for t in pending:
+        t.cancel()
+        try:
+            await t
+        except Exception:
+            pass
+
+    if results:
+        _set_cached(keyword, cache_plugins, None, results)
     return results
 
 
@@ -71,10 +143,15 @@ def merge_by_type(results: List[SearchResult]) -> Dict[str, List[Link]]:
     merged: Dict[str, List[Link]] = {}
     seen_urls = set()
     for result in results:
+        source = result.source or ""
+        published_at = result.published_at
         for link in result.links:
             if not link.url or link.url in seen_urls:
                 continue
             seen_urls.add(link.url)
+            link.source = link.source or source
+            if published_at and not link.published_at:
+                link.published_at = published_at
             merged.setdefault(link.type, []).append(link)
     return merged
 
@@ -88,6 +165,18 @@ def filter_cloud_types(results: List[SearchResult], cloud_types: List[str] | Non
         if links:
             filtered.append(SearchResult(**{**r.model_dump(), "links": links}))
     return filtered
+
+
+def deduplicate_results(results: List[SearchResult]) -> List[SearchResult]:
+    seen = set()
+    out: List[SearchResult] = []
+    for r in results:
+        key = (r.title or "") + "|" + (r.links[0].url if r.links else "")
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(r)
+    return out
 
 
 async def perform_search(db: Session, request: SearchRequest, client_ip: str = "") -> SearchResponse:
@@ -109,6 +198,7 @@ async def perform_search(db: Session, request: SearchRequest, client_ip: str = "
         all_results.extend(item)
 
     all_results = filter_cloud_types(all_results, request.cloud_types)
+    all_results = deduplicate_results(all_results)
     all_results.sort(key=lambda x: x.published_at or datetime.min, reverse=True)
     merged = merge_by_type(all_results)
 

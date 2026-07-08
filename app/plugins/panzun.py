@@ -97,7 +97,7 @@ class PanzunPlugin(PluginBase):
             content_html = included[f"posts:{post_id}"].get("attributes", {}).get("contentHtml", "")
 
         content = self._clean_html(content_html)
-        links = self._extract_links(content_html)
+        links = await self._extract_links(client, content_html)
 
         tags = []
         tags_raw = rel.get("tags", {}).get("data", [])
@@ -119,7 +119,7 @@ class PanzunPlugin(PluginBase):
 
         return links, content, tags, published_at
 
-    def _extract_links(self, html: str) -> List[Link]:
+    async def _extract_links(self, client: httpx.AsyncClient, html: str) -> List[Link]:
         soup = BeautifulSoup(html or "", "html.parser")
         seen = set()
         links: List[Link] = []
@@ -129,7 +129,7 @@ class PanzunPlugin(PluginBase):
                 continue
             seen.add(url)
             if "a.7u9.cn/s/" in url:
-                url = self._resolve_short(url)
+                url = await self._resolve_short(url, client)
             t = detect_disk_type(url)
             if t:
                 links.append(Link(type=t, url=url, note=a.get_text(strip=True), source=f"plugin:{self.name}"))
@@ -138,15 +138,15 @@ class PanzunPlugin(PluginBase):
                 continue
             seen.add(url)
             if "a.7u9.cn/s/" in url:
-                url = self._resolve_short(url)
+                url = await self._resolve_short(url, client)
             t = detect_disk_type(url)
             if t:
                 links.append(Link(type=t, url=url, source=f"plugin:{self.name}"))
         return links
 
-    def _resolve_short(self, url: str) -> str:
+    async def _resolve_short(self, url: str, client: httpx.AsyncClient) -> str:
         try:
-            resp = httpx.get(url, follow_redirects=False, timeout=10, headers={"User-Agent": "python-requests/2.31.0"})
+            resp = await client.get(url, follow_redirects=False, timeout=10, headers={"User-Agent": "python-requests/2.31.0"})
             location = resp.headers.get("location", "")
             if location:
                 return location

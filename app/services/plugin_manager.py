@@ -8,6 +8,8 @@ from app.plugins.quarksoo import QuarksooPlugin
 from app.plugins.qupanshe import QuPanShePlugin
 from app.plugins.hunhepan import HunhepanPlugin
 from app.plugins.panzun import PanzunPlugin
+from app.plugins.pan666 import Pan666Plugin
+from app.plugins.yunso import YunsoPlugin
 
 
 class PluginManager:
@@ -20,6 +22,8 @@ class PluginManager:
         self.register(QuPanShePlugin())
         self.register(HunhepanPlugin())
         self.register(PanzunPlugin())
+        self.register(Pan666Plugin())
+        self.register(YunsoPlugin())
 
     def register(self, plugin: PluginBase) -> None:
         self._plugins.append(plugin)
