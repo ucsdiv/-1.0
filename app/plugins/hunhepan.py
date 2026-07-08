@@ -1,5 +1,6 @@
 import asyncio
 import re
+import time
 from datetime import datetime
 from typing import List, Dict, Any
 
@@ -17,19 +18,38 @@ class HunhepanPlugin(PluginBase):
     apis = [
         "https://hunhepan.com/open/search/disk",
         "https://qkpanso.com/v1/search/disk",
-        "https://kuake8.com/v1/search/disk",
-        "https://www.misoso.cc/v1/search/disk",
     ]
 
     async def search(self, keyword: str, limit: int = 20) -> List[SearchResult]:
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            tasks = [self._search_api_first_page(client, api, keyword) for api in self.apis]
-            gathered = await asyncio.gather(*tasks, return_exceptions=True)
+            tasks = [asyncio.create_task(self._search_api_first_page(client, api, keyword)) for api in self.apis]
+            pending = set(tasks)
+            all_items: List[Dict[str, Any]] = []
+            deadline = time.monotonic() + self.timeout
 
-        all_items: List[Dict[str, Any]] = []
-        for item in gathered:
-            if isinstance(item, list):
-                all_items.extend(item)
+            while pending and time.monotonic() < deadline:
+                timeout = max(0.1, deadline - time.monotonic())
+                done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED, timeout=timeout)
+                for task in done:
+                    try:
+                        item = task.result()
+                    except Exception:
+                        continue
+                    if isinstance(item, list):
+                        all_items.extend(item)
+                    if len(all_items) >= limit:
+                        break
+                if len(all_items) >= limit:
+                    for t in pending:
+                        t.cancel()
+                    break
+
+            for t in pending:
+                t.cancel()
+                try:
+                    await t
+                except (Exception, asyncio.CancelledError):
+                    pass
 
         unique = self._dedupe(all_items)
         return self._convert(unique)[:limit]
@@ -42,7 +62,7 @@ class HunhepanPlugin(PluginBase):
             "exact": False,
             "format": [],
             "share_time": "",
-            "size": 30,
+            "size": 10,
             "type": "",
             "exclude_user": [],
             "adv_params": {"wechat_pwd": "", "platform": "pc"},
@@ -59,7 +79,7 @@ class HunhepanPlugin(PluginBase):
             data = resp.json()
             if data.get("code") == 200:
                 return data.get("data", {}).get("list", [])
-        except Exception:
+        except (Exception, asyncio.CancelledError):
             pass
         return []
 

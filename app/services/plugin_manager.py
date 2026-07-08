@@ -12,6 +12,7 @@ from app.plugins.pan666 import Pan666Plugin
 from app.plugins.yunso import YunsoPlugin
 from app.plugins.jikepan import JikepanPlugin
 from app.plugins.panta import PantaPlugin
+from app.plugins.melost import MelostPlugin
 
 
 class PluginManager:
@@ -28,6 +29,7 @@ class PluginManager:
         self.register(YunsoPlugin())
         self.register(JikepanPlugin())
         self.register(PantaPlugin())
+        self.register(MelostPlugin())
 
     def register(self, plugin: PluginBase) -> None:
         self._plugins.append(plugin)

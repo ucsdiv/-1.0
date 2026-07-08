@@ -9,15 +9,15 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./pansou.db"
 
-    upstream_pansou_enabled: bool = False
-    upstream_pansou_base_url: str = "http://127.0.0.1:8888"
-    upstream_pansou_timeout: float = 3.0
+    upstream_pansou_enabled: bool = True
+    upstream_pansou_base_url: str = "https://so.252035.xyz"
+    upstream_pansou_timeout: float = 8.0
 
     native_plugins_enabled: bool = True
 
     cache_ttl: int = 300
     plugin_timeout: float = 3.0
-    search_timeout: float = 5.0
+    search_timeout: float = 6.0
     max_concurrent_plugins: int = 8
 
     class Config:

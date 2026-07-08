@@ -21,14 +21,23 @@ class UpstreamPanSouPlugin(PluginBase):
         payload = {"kw": keyword, "res": "merge", "limit": limit}
 
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(url, json=payload)
+            async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
+                resp = await client.post(
+                    url,
+                    json=payload,
+                    headers={
+                        "Content-Type": "application/json",
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                        "Accept": "application/json, text/plain, */*",
+                    },
+                )
                 resp.raise_for_status()
-                data = resp.json()
+                resp_data = resp.json()
         except Exception:
             return []
 
         results: List[SearchResult] = []
+        data = resp_data.get("data") or resp_data
         merged = data.get("merged_by_type") or {}
 
         for disk_type, items in merged.items():

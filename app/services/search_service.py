@@ -85,7 +85,8 @@ async def search_plugins(keyword: str, plugin_names: List[str] | None, limit: in
     if cached is not None:
         return cached
 
-    per_plugin_limit = max(1, min(20, limit // max(1, len(plugins)) + 5))
+    per_plugin_limit = max(10, min(20, limit // max(1, len(plugins)) + 5))
+    fast_threshold = 6  # return early once we have enough quality results
 
     async def run_plugin(plugin):
         try:
@@ -106,14 +107,17 @@ async def search_plugins(keyword: str, plugin_names: List[str] | None, limit: in
     pending = set(tasks)
     deadline = time.time() + settings.search_timeout
     started = time.time()
-    min_fast_wait = 1.2  # return early once we have enough results and waited at least this long (seconds)
+    min_fast_wait = 1.0  # seconds: let fast plugins finish before returning early
 
     while pending and time.time() < deadline:
         done, pending = await asyncio.wait(
             pending, return_when=asyncio.FIRST_COMPLETED, timeout=max(0.1, deadline - time.time())
         )
         for task in done:
-            item = task.result()
+            try:
+                item = task.result()
+            except (Exception, asyncio.CancelledError):
+                continue
             if isinstance(item, list):
                 results.extend(item)
             if len(results) >= limit * 2:
@@ -121,7 +125,7 @@ async def search_plugins(keyword: str, plugin_names: List[str] | None, limit: in
                     t.cancel()
                 _set_cached(keyword, cache_plugins, None, results[:limit * 3])
                 return results[:limit * 3]
-        if len(results) >= limit and (time.time() - started) >= min_fast_wait:
+        if len(results) >= fast_threshold and (time.time() - started) >= min_fast_wait:
             for t in pending:
                 t.cancel()
             _set_cached(keyword, cache_plugins, None, results[:limit * 3])
@@ -131,7 +135,7 @@ async def search_plugins(keyword: str, plugin_names: List[str] | None, limit: in
         t.cancel()
         try:
             await t
-        except Exception:
+        except (Exception, asyncio.CancelledError):
             pass
 
     if results:
