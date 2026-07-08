@@ -289,12 +289,18 @@
             resultsEl.innerHTML = '<div class="loading"><div class="spinner"></div>聚合搜索中...</div>';
             statsEl.textContent = '';
 
-            const params = new URLSearchParams({ kw, res: currentRes, limit: '50' });
-            if (currentType !== 'all') params.set('cloud_types', currentType);
-
             const started = performance.now();
             try {
-                const resp = await fetch('/api/search?' + params.toString());
+                const resp = await fetch('/api/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        kw,
+                        res: currentRes,
+                        limit: 50,
+                        cloud_types: currentType === 'all' ? [] : [currentType],
+                    }),
+                });
                 const data = await resp.json();
                 render(data, started);
             } catch (e) {
