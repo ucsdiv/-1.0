@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PanSou 网盘搜索</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #f5f7fa;
+            color: #333;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 20px 60px;
+            text-align: center;
+        }
+        .header h1 { margin: 0 0 8px; font-size: 28px; font-weight: 700; }
+        .header p { margin: 0; opacity: 0.9; font-size: 14px; }
+        .search-box {
+            max-width: 680px;
+            margin: -30px auto 20px;
+            padding: 0 16px;
+            position: relative;
+            z-index: 10;
+        }
+        .search-input-wrap {
+            display: flex;
+            background: white;
+            border-radius: 50px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .search-input {
+            flex: 1;
+            border: none;
+            padding: 16px 24px;
+            font-size: 16px;
+            outline: none;
+        }
+        .search-btn {
+            border: none;
+            background: #667eea;
+            color: white;
+            padding: 0 28px;
+            font-size: 16px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .search-btn:active { background: #5a6fd6; }
+        .container {
+            max-width: 680px;
+            margin: 0 auto;
+            padding: 0 16px 40px;
+        }
+        .filters {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            overflow-x: auto;
+            padding-bottom: 4px;
+        }
+        .filter-btn {
+            border: 1px solid #ddd;
+            background: white;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+        .filter-btn.active { background: #667eea; color: white; border-color: #667eea; }
+        .result-card {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+        .result-title { font-size: 15px; font-weight: 600; margin-bottom: 8px; color: #222; }
+        .result-meta { font-size: 12px; color: #888; margin-bottom: 10px; }
+        .links { display: flex; flex-direction: column; gap: 8px; }
+        .link-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 10px 12px;
+        }
+        .link-info { flex: 1; min-width: 0; }
+        .link-url {
+            font-size: 13px;
+            color: #667eea;
+            word-break: break-all;
+            text-decoration: none;
+        }
+        .link-badge {
+            display: inline-block;
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: #e3e8ff;
+            color: #667eea;
+            margin-bottom: 4px;
+        }
+        .copy-btn {
+            border: none;
+            background: #667eea;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            margin-left: 8px;
+            cursor: pointer;
+        }
+        .empty, .loading { text-align: center; padding: 40px 20px; color: #888; }
+        .tabs {
+            display: flex;
+            background: white;
+            border-radius: 12px;
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+        .tab {
+            flex: 1;
+            text-align: center;
+            padding: 12px;
+            font-size: 14px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+        }
+        .tab.active { color: #667eea; border-bottom-color: #667eea; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>PanSou 网盘搜索</h1>
+        <p>聚合百度、阿里、夸克、天翼等网盘资源</p>
+    </div>
+
+    <div class="search-box">
+        <div class="search-input-wrap">
+            <input type="text" class="search-input" id="kw" placeholder="输入关键词搜索..." onkeydown="if(event.key==='Enter') search()">
+            <button class="search-btn" onclick="search()">搜索</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="tabs">
+            <div class="tab active" data-res="merge" onclick="setRes('merge')">按网盘分类</div>
+            <div class="tab" data-res="results" onclick="setRes('results')">全部结果</div>
+        </div>
+
+        <div class="filters" id="filters">
+            <button class="filter-btn active" data-type="all" onclick="setType('all')">全部</button>
+            <button class="filter-btn" data-type="baidu" onclick="setType('baidu')">百度</button>
+            <button class="filter-btn" data-type="aliyun" onclick="setType('aliyun')">阿里</button>
+            <button class="filter-btn" data-type="quark" onclick="setType('quark')">夸克</button>
+            <button class="filter-btn" data-type="tianyi" onclick="setType('tianyi')">天翼</button>
+            <button class="filter-btn" data-type="uc" onclick="setType('uc')">UC</button>
+            <button class="filter-btn" data-type="xunlei" onclick="setType('xunlei')">迅雷</button>
+        </div>
+
+        <div id="results">
+            <div class="empty">输入关键词开始搜索</div>
+        </div>
+    </div>
+
+    <script>
+        let currentRes = 'merge';
+        let currentType = 'all';
+
+        function setRes(res) {
+            currentRes = res;
+            document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.res === res));
+            search();
+        }
+
+        function setType(type) {
+            currentType = type;
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b.dataset.type === type));
+            search();
+        }
+
+        async function search() {
+            const kw = document.getElementById('kw').value.trim();
+            if (!kw) return;
+            const resultsEl = document.getElementById('results');
+            resultsEl.innerHTML = '<div class="loading">搜索中...</div>';
+
+            const params = new URLSearchParams({ kw, res: currentRes });
+            if (currentType !== 'all') params.set('cloud_types', currentType);
+
+            try {
+                const resp = await fetch('/api/search?' + params.toString());
+                const data = await resp.json();
+                render(data);
+            } catch (e) {
+                resultsEl.innerHTML = '<div class="empty">请求失败，请检查后端服务</div>';
+            }
+        }
+
+        function render(data) {
+            const resultsEl = document.getElementById('results');
+            if (currentRes === 'merge') {
+                renderMerged(data.merged_by_type || {});
+            } else {
+                renderResults(data.results || []);
+            }
+        }
+
+        function renderMerged(merged) {
+            const resultsEl = document.getElementById('results');
+            const types = Object.keys(merged);
+            if (!types.length) {
+                resultsEl.innerHTML = '<div class="empty">未找到相关资源</div>';
+                return;
+            }
+            resultsEl.innerHTML = types.map(type => {
+                const items = merged[type];
+                return `<div class="result-card">
+                    <div class="result-title">${typeName(type)} (${items.length})</div>
+                    <div class="links">${items.map(linkItem).join('')}</div>
+                </div>`;
+            }).join('');
+        }
+
+        function renderResults(results) {
+            const resultsEl = document.getElementById('results');
+            if (!results.length) {
+                resultsEl.innerHTML = '<div class="empty">未找到相关资源</div>';
+                return;
+            }
+            resultsEl.innerHTML = results.map(r => `<div class="result-card">
+                <div class="result-title">${escapeHtml(r.title)}</div>
+                <div class="result-meta">来源：${r.source || '未知'}</div>
+                <div class="links">${(r.links || []).map(linkItem).join('')}</div>
+            </div>`).join('');
+        }
+
+        function linkItem(link) {
+            const url = link.url || '';
+            const pwd = link.password || '';
+            const text = pwd ? `${url} （提取码：${pwd}）` : url;
+            return `<div class="link-item">
+                <div class="link-info">
+                    <span class="link-badge">${typeName(link.type)}</span>
+                    <a class="link-url" href="${url}" target="_blank">${escapeHtml(text)}</a>
+                </div>
+                <button class="copy-btn" onclick="copyText('${url}${pwd ? ' 提取码：'+pwd : ''}')">复制</button>
+            </div>`;
+        }
+
+        function typeName(type) {
+            const map = {
+                baidu: '百度网盘', aliyun: '阿里云盘', quark: '夸克网盘', tianyi: '天翼云盘',
+                uc: 'UC网盘', mobile: '移动云盘', '115': '115网盘', pikpak: 'PikPak',
+                xunlei: '迅雷网盘', '123': '123网盘', google: '谷歌云盘', magnet: '磁力链接', ed2k: '电驴链接'
+            };
+            return map[type] || type;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        async function copyText(text) {
+            try {
+                await navigator.clipboard.writeText(text);
+                alert('已复制到剪贴板');
+            } catch (e) {
+                prompt('请手动复制', text);
+            }
+        }
+    </script>
+</body>
+</html>

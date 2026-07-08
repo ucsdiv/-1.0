@@ -1,0 +1,18 @@
+version: "3.8"
+
+services:
+  pansou-python:
+    build: .
+    container_name: pansou-python
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///./pansou.db
+      - UPSTREAM_PANSOU_ENABLED=true
+      - UPSTREAM_PANSOU_BASE_URL=http://host.docker.internal:8888
+      - UPSTREAM_PANSOU_TIMEOUT=5
+      - NATIVE_PLUGINS_ENABLED=false
+      - SEARCH_TIMEOUT=8
+    volumes:
+      - ./pansou.db:/app/pansou.db
+    restart: unless-stopped
